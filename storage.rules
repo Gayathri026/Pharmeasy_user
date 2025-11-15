@@ -1,0 +1,34 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             firestore.get(/databases/(default)/documents/user_roles/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Prescription files - FIXED VERSION
+    match /prescriptions/{userId}/{fileName} {
+      // Users can upload files to their own folder
+      allow create: if isAuthenticated() && 
+                       request.auth.uid == userId &&
+                       request.resource.size < 5 * 1024 * 1024;
+      
+      // Users can read their own files, admins can read all
+      allow read: if isAuthenticated() && 
+                     (request.auth.uid == userId || isAdmin());
+      
+      // Only admins can delete
+      allow delete: if isAdmin();
+    }
+    
+    // Allow listing for authenticated users
+    match /prescriptions/{allPaths=**} {
+      allow list: if isAuthenticated();
+    }
+  }
+}
